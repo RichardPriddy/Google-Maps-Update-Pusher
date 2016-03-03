@@ -1,0 +1,169 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.0.0-beta1/jquery.min.js" type="text/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.0/knockout-min.js" type="text/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout.mapping/2.4.1/knockout.mapping.min.js" type="text/javascript"></script>
+</head>
+<body>
+
+    <div id="map1Div" data-bind="style:{width:'100%',height:'1000px'},map:pointerMap"></div>
+
+    <script type="text/javascript">
+
+        $(document).ready(function () {
+            ko.applyBindings(viewModel);
+        });
+
+        var pointers = ['Pointer1', 'Pointer2'];
+
+        if (!!window.EventSource) {
+            EventSourceUpdate();
+        } else {
+            if (XMLHttpRequest) {
+               XMLHttpRequestUpdate();
+            }
+        }
+
+        function EventSourceUpdate() {
+            var source = new EventSource('http://localhost:22222/api/Pointer/');
+            source.addEventListener('message', function (e) {
+                console.log(e.data);
+                var json = JSON.parse(e.data);
+                viewModel.pointerMap.pointers[json.PointerName].lat(json.Lattitude);
+                viewModel.pointerMap.pointers[json.PointerName].lng(json.Longitude);
+            }, false);
+
+            source.addEventListener('open', function (e) {
+                console.log('Connection open!');
+            }, false);
+
+            source.addEventListener('error', function (e) {
+                console.log('Connection closed!');
+                EventSourceUpdate(pointerName);
+            }, false);
+        }
+
+        function XMLHttpRequestUpdate(pointerName) {
+            console.log('Connection open!');
+            $.ajax({
+                type: 'GET',
+                dataType: 'json',
+                url: "http://localhost:22222/api/Pointer/?" + Math.random(),
+                cache: false,
+                error: function (xhr, ajaxOptions, thrownError) {
+                    // If the download throws an error, restart it.
+                    // This happens every 60s, ensures the responseText doesn't get too big!
+                    console.log('Connection closed!');
+                    XMLHttpRequestUpdate(pointerName);
+                },
+                timeout: 2 * 60 * 60 * 1000,
+                xhr: function () {
+                    var xhr = new window.XMLHttpRequest();
+                    //Download progress
+                    xhr.addEventListener('Progress', function (evt) {
+                        var data = evt.srcElement.responseText.split('data:');
+                        var json = JSON.parse(data[data.length - 1]);
+                        //console.log(json);
+                        viewModel.pointerMap.pointers[json.PointerName].lat(json.Lattitude);
+                        viewModel.pointerMap.pointers[json.PointerName].lng(json.Longitude);
+                    }, false);
+                    return xhr;
+                }
+            });
+        }
+
+        function PointerViewModel(pointerName) {
+            var self = this;
+            self.lat = ko.observable(0);
+            self.lng = ko.observable(0);
+            self.pointerName = pointerName;
+
+            self.googleMap = ko.observable();
+
+            self.googleMap.subscribe(function (newMap) {
+
+                self.onChangedCoord = function (newValue) {
+                    var latLng = new google.maps.LatLng(
+                        ko.utils.unwrapObservable(self.lat),
+                        ko.utils.unwrapObservable(self.lng));
+
+                    if (!self.marker) {
+                        self.marker = new google.maps.Marker({
+                            map: newMap,
+                            position: latLng,
+                            title: 'You Are Here',
+                            draggable: false
+                        });
+
+                        self.marker.addListener('click', function () {
+                            self.infoWindow.open(newMap, self.marker);
+                        });
+                    }
+
+                    self.marker.setPosition(latLng);
+                };
+
+                self.onChangedIcon = function (newValue) {
+                    self.marker.setIcon(newValue);
+                };
+
+                self.onChangedTimestamp = function (newValue) {
+                    self.infoWindow.setContent("<b>" + self.pointerName + "</b>");
+                };
+
+                self.infoWindow = new google.maps.InfoWindow({
+                    content: self.pointerName
+                });
+
+                self.lat.subscribe(self.onChangedCoord);
+                self.lng.subscribe(self.onChangedCoord);
+
+                self.timestamp.subscribe(self.onChangedTimestamp);
+            });
+        }
+
+        function MyViewModel(pointerList) {
+            var self = this;
+            self.pointerMap = {
+                pointers: { }
+            };
+            for (var i = 0; i < pointerList.length; i++) {
+                self.pointerMap.pointers[pointerList[i]] = new PointerViewModel(pointerList[i]);
+            }
+        }
+
+        ko.bindingHandlers.map = {
+            init: function (element, valueAccessor, allBindingsAccessor, viewModel) {
+                var mapObj = ko.utils.unwrapObservable(valueAccessor());
+                var latLng = new google.maps.LatLng(50.785039, -1.096310);
+
+                var mapOptions = {
+                    center: latLng,
+                    zoom: 12,
+                    mapTypeId: google.maps.MapTypeId.ROADMAP
+                };
+
+                mapObj.googleMap = new google.maps.Map(element, mapOptions);
+
+                for (var pointer in mapObj.pointers) {
+                    mapObj.pointers[pointer].googleMap(mapObj.googleMap);
+                }
+
+                $("#" + element.getAttribute("id")).data("mapObj", mapObj);
+            }
+        };
+
+        var viewModel = new MyViewModel(pointers);
+    </script>
+
+    <script src="https://maps.googleapis.com/maps/api/js?key=[Your_API_Key]"
+            type="text/javascript">
+    </script>
+
+</body>
+</html>
