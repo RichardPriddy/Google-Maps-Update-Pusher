@@ -16,7 +16,7 @@ namespace RP.Web.LocationService
 {
     using System;
     using System.Data.SqlClient;
-
+    using System.Net;
     public class Program
     {
         private static string connectionString = @"Data Source=(local)\SQLExpress;Initial Catalog=LocationTracker;Integrated Security=True";
@@ -40,17 +40,30 @@ namespace RP.Web.LocationService
             {
                 throw new ApplicationException("No permission");
             }
+            var serverIP = ServerIPAddress();
+            Console.WriteLine("Server Address: http://" + serverIP + ":22222");
 
-            var config = new HttpSelfHostConfiguration("http://localhost:22222");
+            
+            var config = new HttpSelfHostConfiguration("http://"+ serverIP+":22222");
             config.Routes.MapHttpRoute("API Default", "api/{controller}/{id}",
                 new { id = RouteParameter.Optional });
             config.TransferMode = System.ServiceModel.TransferMode.Streamed;
-            config.EnableCors(new EnableCorsAttribute("http://localhost:22223", "", ""));
+            config.EnableCors(new EnableCorsAttribute("http://" + serverIP + ":22222", "", ""));
 
             using (var server = new HttpSelfHostServer(config))
             {
-                server.OpenAsync().Wait();
-
+                try
+                {
+                    server.OpenAsync().Wait();
+                }
+                catch(AggregateException)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("You need to enable the firewall for this port:");
+                    Console.WriteLine(@"netsh http add urlacl url=http://+:22222/ user=Everyone");
+                    Console.ReadKey();
+                    return;
+                }
                 _sqlDependency = new SqlDependencyEx(connectionString, database, table, schema, SqlDependencyEx.NotificationTypes.Insert);
                 _sqlDependency.Start();
                 _sqlDependency.TableChanged += FerryLocationUpdated;
@@ -59,6 +72,21 @@ namespace RP.Web.LocationService
 
                 _sqlDependency.Stop();
             }
+        }
+
+        private static string ServerIPAddress()
+        {
+            IPHostEntry host;
+            string localIP = "?";
+            host = Dns.GetHostEntry(Dns.GetHostName());
+            foreach (IPAddress ip in host.AddressList)
+            {
+                if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                {
+                    localIP = ip.ToString();
+                }
+            }
+            return localIP;
         }
 
         private static void FerryLocationUpdated(object sender, SqlDependencyEx.TableChangedEventArgs e)
