@@ -44,11 +44,11 @@
 
             source.addEventListener('error', function (e) {
                 console.log('Connection closed!');
-                EventSourceUpdate(pointerName);
+                EventSourceUpdate();
             }, false);
         }
 
-        function XMLHttpRequestUpdate(pointerName) {
+        function XMLHttpRequestUpdate() {
             console.log('Connection open!');
             $.ajax({
                 type: 'GET',
@@ -59,7 +59,7 @@
                     // If the download throws an error, restart it.
                     // This happens every 60s, ensures the responseText doesn't get too big!
                     console.log('Connection closed!');
-                    XMLHttpRequestUpdate(pointerName);
+                    XMLHttpRequestUpdate();
                 },
                 timeout: 2 * 60 * 60 * 1000,
                 xhr: function () {
@@ -108,22 +108,12 @@
                     self.marker.setPosition(latLng);
                 };
 
-                self.onChangedIcon = function (newValue) {
-                    self.marker.setIcon(newValue);
-                };
-
-                self.onChangedTimestamp = function (newValue) {
-                    self.infoWindow.setContent("<b>" + self.pointerName + "</b>");
-                };
-
                 self.infoWindow = new google.maps.InfoWindow({
                     content: self.pointerName
                 });
 
                 self.lat.subscribe(self.onChangedCoord);
                 self.lng.subscribe(self.onChangedCoord);
-
-                self.timestamp.subscribe(self.onChangedTimestamp);
             });
         }
 
@@ -161,7 +151,7 @@
         var viewModel = new MyViewModel(pointers);
     </script>
 
-    <script src="https://maps.googleapis.com/maps/api/js?key=[Your_API_Key]"
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCExoVkLQ2MllHKsxaeecVjFXxSJdervLc"
             type="text/javascript">
     </script>
 
